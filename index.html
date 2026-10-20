@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>雙機共用 GS v 0 大圖引擎列印工作台 (B21 & XP-Q90EC)</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Noto Sans TC 黑體 -->
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+  <!-- CP936 (GBK) 編碼模組 -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/cpexcel.js"></script>
+
+  <style>
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      background-color: #0f172a;
+      color: #f1f5f9;
+    }
+  </style>
+</head>
+<body class="p-4 md:p-6">
+
+  <div class="max-w-5xl mx-auto space-y-5">
+    
+    <!-- 頂部：雙機獨立連線與模式切換面板 -->
+    <header class="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-lg space-y-4">
+      <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-700 pb-3">
+        <div>
+          <h1 class="text-lg font-black text-white tracking-wide">雙機共用 GS v 0 大圖引擎工作台</h1>
+          <p class="text-xs text-slate-400 mt-0.5">單一 Raster 點陣核心 ｜ 支援 精臣 B21 (50×90貼紙) & XP-Q90EC (240B封包/自動切紙)</p>
+        </div>
+        <!-- 當前預覽與目標機台切換 -->
+        <div class="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700">
+          <button id="modeBtnA" onclick="switchProfile('A')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-amber-500 text-slate-950 shadow">
+            模式 A：精臣 B21 (50×90mm)
+          </button>
+          <button id="modeBtnB" onclick="switchProfile('B')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white">
+            模式 B：XP-Q90EC (切紙/240B)
+          </button>
+        </div>
+      </div>
+
+      <!-- 雙機連線狀態卡 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- 機台 A：精臣 B21 -->
+        <div class="bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/30 flex flex-col justify-between gap-3">
+          <div class="flex justify-between items-start">
+            <div>
+              <span class="text-xs font-black text-amber-400">機台 A：精臣 B21 (標籤貼紙機)</span>
+              <p class="text-[11px] text-slate-400 mt-0.5">範圍: 50×90mm (384×720 dots) ｜ 結尾: 貼紙定位 (不切紙)</p>
+            </div>
+            <span id="badgeA" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+              未連線
+            </span>
+          </div>
+          <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-800">
+            <label class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" id="lock90mmA" checked onchange="drawSnapshot()" class="accent-amber-500">
+              強制鎖定 90mm 總高 (720px)
+            </label>
+            <button onclick="connectPrinter('A')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold active:scale-95 transition-all">
+              連線 精臣 B21
+            </button>
+          </div>
+        </div>
+
+        <!-- 機台 B：XP-Q90EC -->
+        <div class="bg-slate-900/90 p-3.5 rounded-xl border border-indigo-500/30 flex flex-col justify-between gap-3">
+          <div class="flex justify-between items-start">
+            <div>
+              <span class="text-xs font-black text-indigo-400">機台 B：芯燁 XP-Q90EC (熱感應出單機)</span>
+              <p class="text-[11px] text-slate-400 mt-0.5">封包: 240 Bytes 高速傳輸 ｜ 結尾: GS V 自動切紙</p>
+            </div>
+            <span id="badgeB" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+              未連線
+            </span>
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400">列印寬度:</span>
+              <select id="widthB" onchange="drawSnapshot()" class="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-white text-xs">
+                <option value="384">58mm (384px)</option>
+                <option value="576" selected>80mm (576px)</option>
+              </select>
+              <label class="flex items-center gap-1 text-slate-300 cursor-pointer ml-1">
+                <input type="checkbox" id="autoCutB" checked class="accent-indigo-500"> 切紙
+              </label>
+            </div>
+            <button onclick="connectPrinter('B')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold active:scale-95 transition-all">
+              連線 XP-Q90EC
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- 主操作面板 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+      
+      <!-- 左側：逐行樣式編輯器 + 通訊參數設定 -->
+      <section class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg space-y-4">
+        <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+          <h2 class="text-sm font-bold text-amber-400">文字與字級微調 (px)</h2>
+          <button onclick="resetDefaults()" class="text-xs text-slate-400 hover:text-white underline">回復預設</button>
+        </div>
+
+        <div class="space-y-3.5" id="editorRows">
+          <!-- 行 1: 站點與日期 -->
+          <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700 space-y-2">
+            <span class="text-xs text-slate-400 font-bold">第一行：站點與日期</span>
+            <input type="text" id="t1" value="土農-本會直銷站 2026-10-04" oninput="drawSnapshot()" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-amber-500">
+            <div class="flex items-center justify-between text-xs pt-1">
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" id="b1" onchange="drawSnapshot()" class="accent-amber-500"> <span class="text-slate-300">加粗</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <span class="text-slate-400">字號:</span>
+                <input type="range" id="s1" min="14" max="44" value="22" oninput="drawSnapshot()" class="accent-amber-500 w-24">
+                <span id="v1" class="text-amber-400 font-mono w-8 text-right">22px</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 行 2: 客戶姓名 -->
+          <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700 space-y-2">
+            <span class="text-xs text-slate-400 font-bold">第二行：客戶姓名</span>
+            <input type="text" id="t2" value="王大明" oninput="drawSnapshot()" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-amber-500">
+            <div class="flex items-center justify-between text-xs pt-1">
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" id="b2" checked onchange="drawSnapshot()" class="accent-amber-500"> <span class="text-slate-300">加粗 (900)</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <span class="text-slate-400">字號:</span>
+                <input type="range" id="s2" min="20" max="72" value="48" oninput="drawSnapshot()" class="accent-amber-500 w-24">
+                <span id="v2" class="text-amber-400 font-mono w-8 text-right">48px</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 行 3: 數量品項 -->
+          <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700 space-y-2">
+            <span class="text-xs text-slate-400 font-bold">第三行：出貨數量品項</span>
+            <input type="text" id="t3" value="2 大瓶 , 1 中瓶" oninput="drawSnapshot()" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-amber-500">
+            <div class="flex items-center justify-between text-xs pt-1">
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" id="b3" checked onchange="drawSnapshot()" class="accent-amber-500"> <span class="text-slate-300">加粗 (900)</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <span class="text-slate-400">字號:</span>
+                <input type="range" id="s3" min="18" max="60" value="38" oninput="drawSnapshot()" class="accent-amber-500 w-24">
+                <span id="v3" class="text-amber-400 font-mono w-8 text-right">38px</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 行 4: 備註框 -->
+          <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700 space-y-2">
+            <span class="text-xs text-slate-400 font-bold">第四行：特殊備註 (自動外框)</span>
+            <input type="text" id="t4" value="預留款 / 下午取" oninput="drawSnapshot()" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-amber-500">
+            <div class="flex items-center justify-between text-xs pt-1">
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" id="b4" checked onchange="drawSnapshot()" class="accent-amber-500"> <span class="text-slate-300">加粗</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <span class="text-slate-400">字號:</span>
+                <input type="range" id="s4" min="14" max="42" value="20" oninput="drawSnapshot()" class="accent-amber-500 w-24">
+                <span id="v4" class="text-amber-400 font-mono w-8 text-right">20px</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 進階封包與切紙進紙微調 -->
+          <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/70 grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <span class="text-slate-400 block mb-1">B機 (XP-Q90EC) 封包大小:</span>
+              <input type="number" id="chunkSizeB" value="240" min="20" max="512" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white font-mono">
+            </div>
+            <div>
+              <span class="text-slate-400 block mb-1">B機 切紙前走紙行數:</span>
+              <input type="number" id="feedLinesB" value="4" min="0" max="10" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white font-mono">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 右側：即時 Canvas 快照預覽與雙機獨立出單 -->
+      <section class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg flex flex-col items-center gap-4">
+        <div class="w-full flex justify-between items-center border-b border-slate-700 pb-2">
+          <div class="flex items-center gap-2">
+            <h2 class="text-sm font-bold text-slate-300">單一 GS v 0 畫布預覽</h2>
+            <span id="profileTag" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              A: B21 (50x90mm)
+            </span>
+          </div>
+          <span class="text-[11px] text-slate-400 font-mono" id="canvasMetrics">384 x 720 px</span>
+        </div>
+
+        <!-- 畫布預覽容器 -->
+        <div class="bg-slate-900 p-4 rounded-xl border border-slate-950 flex justify-center w-full overflow-auto max-h-[460px]">
+          <canvas id="labelCanvas" width="384" height="720" class="bg-white rounded shadow-md max-w-full h-auto"></canvas>
+        </div>
+
+        <!-- 雙機獨立列印按鈕 -->
+        <div class="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button onclick="printWithEngine('A')" class="py-3.5 px-4 bg-amber-600 hover:bg-amber-500 active:scale-95 rounded-xl text-white font-black text-sm shadow-lg shadow-amber-600/25 transition-all flex flex-col items-center justify-center gap-0.5">
+            <span>列印至 A：精臣 B21</span>
+            <span class="text-[10px] font-normal text-amber-100">50×90範圍 / 貼紙定位</span>
+          </button>
+
+          <button onclick="printWithEngine('B')" class="py-3.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 rounded-xl text-white font-black text-sm shadow-lg shadow-emerald-600/25 transition-all flex flex-col items-center justify-center gap-0.5">
+            <span>列印至 B：XP-Q90EC</span>
+            <span class="text-[10px] font-normal text-emerald-100">240B 大封包 / 自動切紙</span>
+          </button>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- 終端日誌紀錄 -->
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-4 font-mono text-xs text-slate-400 h-36 overflow-y-auto space-y-1 shadow-inner" id="logBox">
+      <div>[系統初始化] 雙機單一 GS v 0 引擎就緒，請選擇連線機台 A (精臣 B21) 或 機台 B (XP-Q90EC)。</div>
+    </section>
+  </div>
+
+  <script>
+    // ==========================================
+    // 1. 雙機硬體參數與連線狀態管理
+    // ==========================================
+    let currentProfile = 'A'; // 當前畫布預覽模式: 'A' (B21) 或 'B' (XP-Q90EC)
+
+    const printers = {
+      A: {
+        name: '精臣 B21',
+        device: null,
+        char: null,
+        widthDots: 384,       // 50mm 標籤有效列印寬度 48mm * 8 dots/mm = 384 dots
+        maxHeightDots: 720,   // 90mm 標籤長度 90mm * 8 dots/mm = 720 dots
+        chunkSize: 120,       // B21 穩定分包大小
+        delayMs: 18
+      },
+      B: {
+        name: 'XP-Q90EC',
+        device: null,
+        char: null,
+        widthDots: 576,       // 80mm 機種預設 576 dots (可於介面切換 384)
+        chunkSize: 240,       // 依據需求設定 240 bytes 高速封包
+        delayMs: 12
+      }
+    };
+
+    function log(msg, isSuccess = false, isError = false) {
+      const box = document.getElementById('logBox');
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+      let colorClass = 'text-slate-400';
+      if (isSuccess) colorClass = 'text-emerald-400 font-bold';
+      if (isError) colorClass = 'text-rose-400 font-bold';
+      box.innerHTML = `<div class="${colorClass}">[${time}] ${msg}</div>` + box.innerHTML;
+    }
+
+    // 切換預覽畫布規格 (A機 50x90貼紙 / B機 XP-Q90EC連續紙)
+    function switchProfile(profile) {
+      currentProfile = profile;
+      const btnA = document.getElementById('modeBtnA');
+      const btnB = document.getElementById('modeBtnB');
+      const tag = document.getElementById('profileTag');
+
+      if (profile === 'A') {
+        btnA.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-amber-500 text-slate-950 shadow";
+        btnB.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white";
+        tag.innerText = "A: B21 (50x90mm)";
+        tag.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30";
+      } else {
+        btnB.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-500 text-white shadow";
+        btnA.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white";
+        tag.innerText = "B: XP-Q90EC (切紙模式)";
+        tag.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30";
+      }
+      drawSnapshot();
+    }
+
+    // ==========================================
+    // 2. 畫布渲染 (支援 A機 50x90mm 貼紙範圍 & B機 動態範圍)
+    // ==========================================
+    function drawSnapshot(forceTarget = null) {
+      const target = forceTarget || currentProfile;
+      const canvas = document.getElementById('labelCanvas');
+      const ctx = canvas.getContext('2d');
+
+      const t1 = document.getElementById('t1').value, s1 = parseInt(document.getElementById('s1').value), b1 = document.getElementById('b1').checked;
+      const t2 = document.getElementById('t2').value, s2 = parseInt(document.getElementById('s2').value), b2 = document.getElementById('b2').checked;
+      const t3 = document.getElementById('t3').value, s3 = parseInt(document.getElementById('s3').value), b3 = document.getElementById('b3').checked;
+      const t4 = document.getElementById('t4').value, s4 = parseInt(document.getElementById('s4').value), b4 = document.getElementById('b4').checked;
+
+      document.getElementById('v1').innerText = `${s1}px`;
+      document.getElementById('v2').innerText = `${s2}px`;
+      document.getElementById('v3').innerText = `${s3}px`;
+      document.getElementById('v4').innerText = `${s4}px`;
+
+      // 計算內容所需高度
+      let contentHeight = 24;
+      contentHeight += s1 + 16;
+      contentHeight += s2 + 18;
+      contentHeight += s3 + 18;
+      if (t4.trim() !== '') contentHeight += s4 + 36;
+      contentHeight += 24;
+
+      // 決定畫布寬度與高度
+      let targetWidth = 384;
+      let targetHeight = contentHeight;
+
+      if (target === 'A') {
+        // A: 精臣 B21 50*90mm 貼紙範圍 (寬 384px, 高上限 720px)
+        targetWidth = 384;
+        const lock90mm = document.getElementById('lock90mmA').checked;
+        targetHeight = lock90mm ? 720 : Math.min(720, contentHeight);
+      } else {
+        // B: XP-Q90EC 可選 58mm(384px) 或 80mm(576px)
+        targetWidth = parseInt(document.getElementById('widthB').value) || 576;
+        targetHeight = contentHeight;
+      }
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const centerX = targetWidth / 2;
+
+      const mmW = Math.round(targetWidth / 8);
+      const mmH = Math.round(targetHeight / 8);
+      document.getElementById('canvasMetrics').innerText = `${targetWidth} x ${targetHeight} px (~${mmW}x${mmH}mm)`;
+
+      // 填滿白底
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 若為 A機 B21 鎖定 90mm 模式，將內容垂直居中於 50x90 貼紙中央
+      let startY = 24;
+      if (target === 'A' && document.getElementById('lock90mmA').checked && targetHeight > contentHeight) {
+        startY = Math.floor((targetHeight - contentHeight) / 2) + 24;
+      }
+
+      ctx.fillStyle = '#000000';
+      ctx.textAlign = 'center';
+      let curY = startY;
+
+      // 第一行
+      ctx.font = `${b1 ? '700' : '400'} ${s1}px 'Noto Sans TC'`;
+      curY += s1;
+      ctx.fillText(t1, centerX, curY);
+
+      // 第二行 (姓名)
+      curY += 18;
+      ctx.font = `${b2 ? '900' : '400'} ${s2}px 'Noto Sans TC'`;
+      curY += s2;
+      ctx.fillText(t2, centerX, curY);
+
+      // 第三行 (數量)
+      curY += 18;
+      ctx.font = `${b3 ? '900' : '400'} ${s3}px 'Noto Sans TC'`;
+      curY += s3;
+      ctx.fillText(t3, centerX, curY);
+
+      // 第四行 (備註外框標籤)
+      if (t4.trim() !== '') {
+        curY += 20;
+        ctx.font = `${b4 ? '700' : '400'} ${s4}px 'Noto Sans TC'`;
+        const textWidth = ctx.measureText(`【 ${t4} 】`).width;
+        const boxPadX = 14;
+        const boxHeight = s4 + 14;
+        
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(centerX - (textWidth / 2) - boxPadX, curY, textWidth + (boxPadX * 2), boxHeight);
+        
+        curY += s4 + 2;
+        ctx.fillText(`【 ${t4} 】`, centerX, curY);
+      }
+    }
+
+    function resetDefaults() {
+      document.getElementById('t1').value = "土農-本會直銷站 2026-10-04";
+      document.getElementById('s1').value = 22; document.getElementById('b1').checked = false;
+      document.getElementById('t2').value = "王大明";
+      document.getElementById('s2').value = 48; document.getElementById('b2').checked = true;
+      document.getElementById('t3').value = "2 大瓶 , 1 中瓶";
+      document.getElementById('s3').value = 38; document.getElementById('b3').checked = true;
+      document.getElementById('t4').value = "預留款 / 下午取";
+      document.getElementById('s4').value = 20; document.getElementById('b4').checked = true;
+      drawSnapshot();
+    }
+
+    // ==========================================
+    // 3. 雙機獨立藍牙連線模組 (支援 B21 與 XP-Q90EC)
+    // ==========================================
+    async function connectPrinter(key) {
+      if (!navigator.bluetooth) {
+        alert("請使用支援 Web Bluetooth 的環境 (如 Android Chrome / Edge 或 iOS Bluefy App) 開啟！");
+        return;
+      }
+
+      const targetPrinter = printers[key];
+      const badgeEl = document.getElementById(key === 'A' ? 'badgeA' : 'badgeB');
+
+      try {
+        log(`[機台 ${key}] 發起藍牙搜尋 (${targetPrinter.name})...`);
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [
+            '000018f0-0000-1000-8000-00805f9b34fb', // 標準 ESC/POS 列印服務
+            '49535343-fe7d-4ae5-8fa9-9fafd205e455', // 芯燁 Xprinter (XP-Q90EC) 常用服務
+            'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // 精臣 B21 / 通用 BLE 透傳服務
+            '0000ff00-0000-1000-8000-00805f9b34fb', // 常見熱感應印表機擴充服務 1
+            '0000ffe0-0000-1000-8000-00805f9b34fb'  // 常見熱感應印表機擴充服務 2
+          ]
+        });
+
+        log(`[機台 ${key}] 配對裝置: ${device.name || '未知裝置'}，建立 GATT 連線中...`);
+        const server = await device.gatt.connect();
+        const services = await server.getPrimaryServices();
+
+        let foundChar = null;
+        for (let service of services) {
+          try {
+            const characteristics = await service.getCharacteristics();
+            for (let char of characteristics) {
+              if (char.properties.writeWithoutResponse || char.properties.write) {
+                foundChar = char;
+                // 優先挑選支援 writeWithoutResponse 的高速通道
+                if (char.properties.writeWithoutResponse) break;
+              }
+            }
+            if (foundChar && foundChar.properties.writeWithoutResponse) break;
+          } catch (e) {}
+        }
+
+        if (!foundChar) {
+          throw new Error("找不到可寫入的藍牙特徵值 (Characteristic)");
+        }
+
+        targetPrinter.device = device;
+        targetPrinter.char = foundChar;
+
+        // 監聽斷線事件
+        device.addEventListener('gattserverdisconnected', () => {
+          targetPrinter.char = null;
+          badgeEl.innerText = "已斷線";
+          badgeEl.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30";
+          log(`[機台 ${key}] ${device.name} 藍牙已斷開連線`, false, true);
+        });
+
+        badgeEl.innerText = `已連線: ${device.name || targetPrinter.name}`;
+        badgeEl.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+        log(`[機台 ${key}] ${device.name || targetPrinter.name} 通訊特徵綁定成功！`, true);
+
+        // 自動切換預覽至剛連線的機台
+        switchProfile(key);
+
+      } catch (e) {
+        log(`[機台 ${key}] 連線失敗: ${e.message}`, false, true);
+      }
+    }
+
+    // ==========================================
+    // 4. 單一共用 GS v 0 大圖點陣引擎
+    // ==========================================
+    /**
+     * 將 Canvas 轉換為單一 GS v 0 (0x1D 0x76 0x30) 點陣封包
+     * @param {HTMLCanvasElement} canvas 畫布元素
+     * @param {Object} options 機台專屬配置 (範圍設定、定位/切紙指令)
+     */
+    function buildGSv0Payload(canvas, options) {
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+      const imgData = ctx.getImageData(0, 0, width, height).data;
+
+      let payload = [
+        0x1B, 0x40,       // ESC @: 初始化印表機
+        0x1C, 0x26,       // FS &: 啟用漢字模式
+        0x1B, 0x61, 0x01  // ESC a 1: 居中對齊
+      ];
+
+      // 若為 B機 (XP-Q90EC)，設定列印區域寬度 (GS W nL nH: 0x1D 0x57 nL nH)
+      if (options.setPrintAreaWidth) {
+        const nL = width % 256;
+        const nH = Math.floor(width / 256);
+        payload.push(0x1D, 0x57, nL, nH);
+      }
+
+      // 單一 GS v 0 大圖引擎核心指令: 0x1D 0x76 0x30 m xL xH yL yH
+      const bytesPerRow = Math.ceil(width / 8);
+      const xL = bytesPerRow % 256;
+      const xH = Math.floor(bytesPerRow / 256);
+      const yL = height % 256;
+      const yH = Math.floor(height / 256);
+
+      payload.push(0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH);
+
+      // 二值化圖元打包 (1-bit per dot)
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x += 8) {
+          let byte = 0;
+          for (let b = 0; b < 8; b++) {
+            if (x + b < width) {
+              const pixelIdx = ((y * width) + (x + b)) * 4;
+              const gray = 0.299 * imgData[pixelIdx] + 0.587 * imgData[pixelIdx + 1] + 0.114 * imgData[pixelIdx + 2];
+              if (gray < 140) {
+                byte |= (1 << (7 - b));
+              }
+            }
+          }
+          payload.push(byte);
+        }
+      }
+
+      // 機台專屬結尾指令
+      if (options.isLabelMode) {
+        // A機 (精臣 B21 50x90 貼紙): 發送貼紙縫隙定位指令 (FF / GS FF)，不切紙
+        payload.push(0x0C);
+      } else {
+        // B機 (XP-Q90EC): 進紙 N 行 + 自動切刀指令 (GS V 66 0)
+        const feedLines = options.feedLines ?? 4;
+        for (let i = 0; i < feedLines; i++) {
+          payload.push(0x0A);
+        }
+        if (options.cutPaper) {
+          // 0x1D 0x56 0x42 0x00: 進紙至切紙位置並半切/全切
+          payload.push(0x1D, 0x56, 0x42, 0x00);
+        }
+      }
+
+      return new Uint8Array(payload);
+    }
+
+    // ==========================================
+    // 5. 雙機分流發送器 (支援 XP-Q90EC 240 Bytes 封包)
+    // ==========================================
+    async function printWithEngine(targetKey) {
+      const targetPrinter = printers[targetKey];
+      if (!targetPrinter.char) {
+        alert(`請先點擊上方按鈕連線【機台 ${targetKey}：${targetPrinter.name}】！`);
+        return;
+      }
+
+      // 先將畫布切換並重繪為目標機台的專屬尺寸規格
+      if (currentProfile !== targetKey) {
+        switchProfile(targetKey);
+      } else {
+        drawSnapshot(targetKey);
+      }
+
+      const canvas = document.getElementById('labelCanvas');
+
+      // 組裝該機台專屬的引擎參數
+      let engineOptions = {};
+      let chunkSize = targetPrinter.chunkSize;
+
+      if (targetKey === 'A') {
+        // A: 精臣 B21 (50x90mm 貼紙範圍)
+        engineOptions = {
+          isLabelMode: true,
+          setPrintAreaWidth: false,
+          cutPaper: false
+        };
+        chunkSize = 120;
+      } else {
+        // B: XP-Q90EC (設定列印範圍 + 切紙 + 240 bytes 封包)
+        const userChunk = parseInt(document.getElementById('chunkSizeB').value) || 240;
+        const feedLines = parseInt(document.getElementById('feedLinesB').value) || 4;
+        const autoCut = document.getElementById('autoCutB').checked;
+
+        engineOptions = {
+          isLabelMode: false,
+          setPrintAreaWidth: true, // 發送 GS W 設定列印範圍
+          feedLines: feedLines,
+          cutPaper: autoCut
+        };
+        chunkSize = userChunk; // 預設 240 bytes
+      }
+
+      log(`[機台 ${targetKey}] 啟動單一 GS v 0 大圖引擎 (${canvas.width}x${canvas.height}px)...`);
+      const data = buildGSv0Payload(canvas, engineOptions);
+
+      log(`[機台 ${targetKey}] 封裝完成 (總計 ${data.length} Bytes)，以每包 ${chunkSize} Bytes 發送中...`);
+
+      let offset = 0;
+      const char = targetPrinter.char;
+
+      try {
+        while (offset < data.length) {
+          const chunk = data.slice(offset, offset + chunkSize);
+          if (char.properties.writeWithoutResponse) {
+            await char.writeValueWithoutResponse(chunk);
+          } else {
+            await char.writeValue(chunk);
+          }
+          offset += chunkSize;
+          await new Promise(r => setTimeout(r, targetPrinter.delayMs));
+        }
+        log(`[機台 ${targetKey}: ${targetPrinter.name}] 大圖傳送與${targetKey === 'B' ? '切紙' : '定位'}指令執行完畢！`, true);
+      } catch (err) {
+        log(`[機台 ${targetKey}] 列印中斷 (${err.message})。若為 BLE MTU 限制，請調降封包大小。`, false, true);
+      }
+    }
+
+    // 頁面載入後初始化畫布
+    window.addEventListener('load', () => {
+      document.fonts.ready.then(() => {
+        drawSnapshot();
+      });
+    });
+  </script>
+</body>
+</html>
